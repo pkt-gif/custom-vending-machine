@@ -1,28 +1,28 @@
 `timescale 1ns / 1ps
 
-// External 3461ASR one-digit display decoder.
-// Common Cathode: segment ON = 1 (active-high).
-// o_ja[7:0] = {dp, g, f, e, d, c, b, a}; dp is always OFF.
+// External one-digit display decoder (board-observed active-low polarity).
+// Segment ON = 0, segment OFF = 1.
+// o_ja[7:0] = {dp, g, f, e, d, c, b, a}; dp is OFF at logic 1.
 module test_fnd_decoder (
     input  wire [3:0] i_state,
     output reg  [7:0] o_ja
 );
-    localparam SEG_0 = 8'b0011_1111;
-    localparam SEG_1 = 8'b0000_0110;
-    localparam SEG_2 = 8'b0101_1011;
-    localparam SEG_3 = 8'b0100_1111;
-    localparam SEG_4 = 8'b0110_0110;
-    localparam SEG_5 = 8'b0110_1101;
-    localparam SEG_6 = 8'b0111_1101;
-    localparam SEG_7 = 8'b0000_0111;
-    localparam SEG_8 = 8'b0111_1111;
-    localparam SEG_9 = 8'b0110_1111;
-    localparam SEG_A = 8'b0111_0111;
-    localparam SEG_B = 8'b0111_1100;
-    localparam SEG_C = 8'b0011_1001;
-    localparam SEG_D = 8'b0101_1110;
-    localparam SEG_E = 8'b0111_1001;
-    localparam SEG_F = 8'b0111_0001;
+    localparam SEG_0 = 8'b1100_0000;
+    localparam SEG_1 = 8'b1111_1001;
+    localparam SEG_2 = 8'b1010_0100;
+    localparam SEG_3 = 8'b1011_0000;
+    localparam SEG_4 = 8'b1001_1001;
+    localparam SEG_5 = 8'b1001_0010;
+    localparam SEG_6 = 8'b1000_0010;
+    localparam SEG_7 = 8'b1111_1000;
+    localparam SEG_8 = 8'b1000_0000;
+    localparam SEG_9 = 8'b1001_0000;
+    localparam SEG_A = 8'b1000_1000;
+    localparam SEG_B = 8'b1000_0011;
+    localparam SEG_C = 8'b1100_0110;
+    localparam SEG_D = 8'b1010_0001;
+    localparam SEG_E = 8'b1000_0110;
+    localparam SEG_F = 8'b1000_1110;
 
     always @(*) begin
         case (i_state)
@@ -44,6 +44,234 @@ module test_fnd_decoder (
             default: o_ja = SEG_F;
         endcase
     end
+endmodule
+
+// --------------------------------------------------------------------------
+// Debug-only selector/helper modules. These intentionally use unique module
+// names so Vivado cannot bind the debug hierarchy to helpers in master_fsm.v.
+// --------------------------------------------------------------------------
+module drink_selector_dbg (
+    input  wire       clk,
+    input  wire       arst,
+    input  wire [4:0] drink_sel,
+    input  wire       flag_state,
+    input  wire       flag_rst,
+    output reg        flag_cplt,
+    output reg  [4:0] drink_out
+);
+    localparam IDLE      = 5'b00000;
+    localparam APPLE     = 5'b10000;
+    localparam ORANGE    = 5'b01000;
+    localparam MANGO     = 5'b00100;
+    localparam GRAPE     = 5'b00010;
+    localparam PINEAPPLE = 5'b00001;
+
+    always @(posedge clk or posedge arst) begin
+        if (arst)
+            {flag_cplt, drink_out} <= 6'b0;
+        else if (flag_state) begin
+            case (drink_sel)
+                5'b00001: {flag_cplt, drink_out} <= {1'b1, PINEAPPLE};
+                5'b00010: {flag_cplt, drink_out} <= {1'b1, GRAPE};
+                5'b00100: {flag_cplt, drink_out} <= {1'b1, MANGO};
+                5'b01000: {flag_cplt, drink_out} <= {1'b1, ORANGE};
+                5'b10000: {flag_cplt, drink_out} <= {1'b1, APPLE};
+                default:  {flag_cplt, drink_out} <= {1'b0, IDLE};
+            endcase
+        end
+        else
+            {flag_cplt, drink_out} <= flag_rst ? 6'b0 : {1'b0, drink_out};
+    end
+endmodule
+
+module sugar_selector_dbg (
+    input  wire       clk,
+    input  wire       arst,
+    input  wire [4:0] sugar_sel,
+    input  wire       flag_state,
+    input  wire       flag_rst,
+    output reg        flag_cplt,
+    output reg  [4:0] led_sugar
+);
+    localparam IDLE      = 5'b00000;
+    localparam SUGAR_20  = 5'b00001;
+    localparam SUGAR_40  = 5'b00011;
+    localparam SUGAR_60  = 5'b00111;
+    localparam SUGAR_80  = 5'b01111;
+    localparam SUGAR_100 = 5'b11111;
+
+    always @(posedge clk or posedge arst) begin
+        if (arst)
+            {flag_cplt, led_sugar} <= 6'b0;
+        else if (flag_state) begin
+            case (sugar_sel)
+                5'b00001: {flag_cplt, led_sugar} <= {1'b1, SUGAR_20};
+                5'b00010: {flag_cplt, led_sugar} <= {1'b1, SUGAR_40};
+                5'b00100: {flag_cplt, led_sugar} <= {1'b1, SUGAR_60};
+                5'b01000: {flag_cplt, led_sugar} <= {1'b1, SUGAR_80};
+                5'b10000: {flag_cplt, led_sugar} <= {1'b1, SUGAR_100};
+                default:  {flag_cplt, led_sugar} <= {1'b0, IDLE};
+            endcase
+        end
+        else
+            {flag_cplt, led_sugar} <= flag_rst ? 6'b0 : {1'b0, led_sugar};
+    end
+endmodule
+
+module ice_selector_dbg (
+    input  wire       clk,
+    input  wire       arst,
+    input  wire [4:0] ice_sel,
+    input  wire       flag_state,
+    input  wire       flag_rst,
+    output reg        flag_cplt,
+    output reg  [4:0] led_ice
+);
+    localparam IDLE  = 5'b00000;
+    localparam ICE_1 = 5'b00001;
+    localparam ICE_2 = 5'b00011;
+    localparam ICE_3 = 5'b00111;
+    localparam ICE_4 = 5'b01111;
+    localparam ICE_5 = 5'b11111;
+
+    always @(posedge clk or posedge arst) begin
+        if (arst)
+            {flag_cplt, led_ice} <= 6'b0;
+        else if (flag_state) begin
+            case (ice_sel)
+                5'b00001: {flag_cplt, led_ice} <= {1'b1, ICE_1};
+                5'b00010: {flag_cplt, led_ice} <= {1'b1, ICE_2};
+                5'b00100: {flag_cplt, led_ice} <= {1'b1, ICE_3};
+                5'b01000: {flag_cplt, led_ice} <= {1'b1, ICE_4};
+                5'b10000: {flag_cplt, led_ice} <= {1'b1, ICE_5};
+                default:  {flag_cplt, led_ice} <= {1'b0, IDLE};
+            endcase
+        end
+        else
+            {flag_cplt, led_ice} <= flag_rst ? 6'b0 : {1'b0, led_ice};
+    end
+endmodule
+
+module led_out_gate_dbg (
+    input  wire       i_state_en,
+    input  wire       apple_inv,
+    input  wire       orange_inv,
+    input  wire       mango_inv,
+    input  wire       grape_inv,
+    input  wire       pine_inv,
+    input  wire [4:0] led_sugar,
+    input  wire [4:0] led_ice,
+    output wire [14:0] led
+);
+    // Fixed debug layout: [14:10]=inventory, [9:5]=sugar, [4:0]=ice.
+    assign led = i_state_en ?
+                 {apple_inv, orange_inv, mango_inv, grape_inv, pine_inv,
+                  led_sugar, led_ice} : 15'b0;
+endmodule
+
+module sw_ctrl_gate_dbg (
+    input  wire [4:0] sw_drink,
+    input  wire [4:0] sw_sugar,
+    input  wire [4:0] sw_ice,
+    input  wire       i_cplt_drink_sel,
+    input  wire       i_cplt_sugar_sel,
+    input  wire       i_cplt_ice_sel,
+    input  wire       i_cplt_servo,
+    output reg        o_cplt_drink_sel,
+    output reg        o_cplt_sugar_sel,
+    output reg        o_cplt_ice_sel,
+    output reg        o_cplt_servo
+);
+    localparam IDLE = 2'd0;
+    localparam OFF  = 2'd1;
+    localparam ON   = 2'd2;
+
+    wire [1:0] drink;
+    wire [1:0] sugar;
+    wire [1:0] ice;
+
+    assign drink = (sw_drink == 5'b00000) ? OFF :
+                   ((sw_drink == 5'b00001) || (sw_drink == 5'b00010) ||
+                    (sw_drink == 5'b00100) || (sw_drink == 5'b01000) ||
+                    (sw_drink == 5'b10000)) ? ON : IDLE;
+
+    assign sugar = (sw_sugar == 5'b00000) ? OFF :
+                   ((sw_sugar == 5'b00001) || (sw_sugar == 5'b00010) ||
+                    (sw_sugar == 5'b00100) || (sw_sugar == 5'b01000) ||
+                    (sw_sugar == 5'b10000)) ? ON : IDLE;
+
+    assign ice = (sw_ice == 5'b00000) ? OFF :
+                 ((sw_ice == 5'b00001) || (sw_ice == 5'b00010) ||
+                  (sw_ice == 5'b00100) || (sw_ice == 5'b01000) ||
+                  (sw_ice == 5'b10000)) ? ON : IDLE;
+
+    always @(*) begin
+        case ({i_cplt_drink_sel, i_cplt_sugar_sel, i_cplt_ice_sel,
+               i_cplt_servo, drink, sugar, ice})
+            {4'b1000, ON,  OFF, OFF}: {o_cplt_drink_sel, o_cplt_sugar_sel,
+                                      o_cplt_ice_sel, o_cplt_servo} = 4'b1000;
+            {4'b0100, ON,  ON,  OFF}: {o_cplt_drink_sel, o_cplt_sugar_sel,
+                                      o_cplt_ice_sel, o_cplt_servo} = 4'b0100;
+            {4'b0010, ON,  ON,  ON }: {o_cplt_drink_sel, o_cplt_sugar_sel,
+                                      o_cplt_ice_sel, o_cplt_servo} = 4'b0010;
+            {4'b0001, OFF, OFF, OFF}: {o_cplt_drink_sel, o_cplt_sugar_sel,
+                                      o_cplt_ice_sel, o_cplt_servo} = 4'b0001;
+            default: {o_cplt_drink_sel, o_cplt_sugar_sel,
+                      o_cplt_ice_sel, o_cplt_servo} = 4'b0000;
+        endcase
+    end
+endmodule
+
+module drink_selector_mux_dbg (
+    input  wire [4:0]  i_drink_out,
+    output reg  [31:0] o_order_info
+);
+    always @(*) begin
+        case (i_drink_out)
+            5'b10000: o_order_info = 32'h0000_4000;
+            5'b01000: o_order_info = 32'h0000_2000;
+            5'b00100: o_order_info = 32'h0000_1000;
+            5'b00010: o_order_info = 32'h0000_0800;
+            5'b00001: o_order_info = 32'h0000_0400;
+            default:  o_order_info = 32'h0000_0000;
+        endcase
+    end
+endmodule
+
+module account_flag_mux_dbg (
+    input  wire        i_state_en,
+    input  wire [31:0] i_statue_out,
+    output reg         o_pay_success,
+    output reg         o_pay_nomoney,
+    output reg         o_pay_soldout
+);
+    always @(*) begin
+        if (i_state_en) begin
+            case (i_statue_out)
+                32'h0000_0001: {o_pay_success, o_pay_nomoney, o_pay_soldout} = 3'b100;
+                32'h0000_0002: {o_pay_success, o_pay_nomoney, o_pay_soldout} = 3'b010;
+                32'h0000_0003: {o_pay_success, o_pay_nomoney, o_pay_soldout} = 3'b001;
+                default:       {o_pay_success, o_pay_nomoney, o_pay_soldout} = 3'b000;
+            endcase
+        end
+        else
+            {o_pay_success, o_pay_nomoney, o_pay_soldout} = 3'b000;
+    end
+endmodule
+
+module masterinf2fsm_inventory_dbg (
+    input  wire        i_state_en,
+    input  wire [31:0] i_inventory_out,
+    output wire        o_inv_apple,
+    output wire        o_inv_orange,
+    output wire        o_inv_mango,
+    output wire        o_inv_grape,
+    output wire        o_inv_pine,
+    output wire        o_all_soldout
+);
+    assign {o_inv_apple, o_inv_orange, o_inv_mango,
+            o_inv_grape, o_inv_pine} = i_inventory_out[14:10];
+    assign o_all_soldout = i_state_en ? i_inventory_out[31] : 1'b0;
 endmodule
 
 // Debug wrapper around the verified master_fsm. All state enables remain
@@ -202,8 +430,8 @@ module top_master_fsm_fnd (
     wire ice_sel_en;
 
     wire [4:0] drink_out;
-    wire [4:0] sugar_out;
-    wire [4:0] ice_out;
+    wire [4:0] sugar_led;
+    wire [4:0] ice_led;
 
     wire apple_inv;
     wire orange_inv;
@@ -247,7 +475,7 @@ module top_master_fsm_fnd (
         .o_ja             (o_ja)
     );
 
-    drink_selector U_DRINK_SELECTOR (
+    drink_selector_dbg U_DRINK_SELECTOR (
         .clk        (clk),
         .arst       (arst),
         .drink_sel  (i_drink_sel),
@@ -257,39 +485,39 @@ module top_master_fsm_fnd (
         .drink_out  (drink_out)
     );
 
-    sugar_selector U_SUGAR_SELECTOR (
+    sugar_selector_dbg U_SUGAR_SELECTOR (
         .clk        (clk),
         .arst       (arst),
         .sugar_sel  (i_sugar_sel),
         .flag_state (sugar_sel_en),
         .flag_rst   (pay_success),
         .flag_cplt  (sugar_sel_done),
-        .led_sugar  (sugar_out)
+        .led_sugar  (sugar_led)
     );
 
-    ice_selector U_ICE_SELECTOR (
+    ice_selector_dbg U_ICE_SELECTOR (
         .clk        (clk),
         .arst       (arst),
         .ice_sel    (i_ice_sel),
         .flag_state (ice_sel_en),
         .flag_rst   (pay_success),
         .flag_cplt  (ice_sel_done),
-        .led_ice    (ice_out)
+        .led_ice    (ice_led)
     );
 
-    led_out_gate U_LED_OUT_GATE (
+    led_out_gate_dbg U_LED_OUT_GATE (
         .i_state_en (led_state),
         .apple_inv  (apple_inv),
         .orange_inv (orange_inv),
         .mango_inv  (mango_inv),
         .grape_inv  (grape_inv),
         .pine_inv   (pine_inv),
-        .led_sugar  (sugar_out),
-        .led_ice    (ice_out),
+        .led_sugar  (sugar_led),
+        .led_ice    (ice_led),
         .led        (led)
     );
 
-    sw_ctrl_gate U_SW_CTRL_GATE (
+    sw_ctrl_gate_dbg U_SW_CTRL_GATE (
         .sw_drink         (i_drink_sel),
         .sw_sugar         (i_sugar_sel),
         .sw_ice           (i_ice_sel),
@@ -303,12 +531,12 @@ module top_master_fsm_fnd (
         .o_cplt_servo     (servo_cplt)
     );
 
-    drink_selector_mux U_DRINK_SELECTOR_MUX (
+    drink_selector_mux_dbg U_DRINK_SELECTOR_MUX (
         .i_drink_out  (drink_out),
         .o_order_info (o_order_info)
     );
 
-    account_flag_mux U_ACCOUNT_FLAG_MUX (
+    account_flag_mux_dbg U_ACCOUNT_FLAG_MUX (
         .i_state_en   (o_account_en),
         .i_statue_out (i_statue_out),
         .o_pay_success(pay_success),
@@ -316,7 +544,7 @@ module top_master_fsm_fnd (
         .o_pay_soldout(pay_soldout)
     );
 
-    masterinf2fsm_inventory U_MATERINF2FSM_INVENTRY (
+    masterinf2fsm_inventory_dbg U_MASTERINF2FSM_INVENTRY (
         .i_state_en     (o_change_en),
         .i_inventory_out(i_inventory_out),
         .o_inv_apple    (apple_inv),

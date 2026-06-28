@@ -62,11 +62,11 @@ module slave_inventory (
     always @(posedge clk or posedge arst) begin
         if (arst) begin
             // ── DB 초기화 (SW[15]↑ 또는 외부 리셋) ──────────────────
-            db_price[0] <= 14'd1200; db_stock[0] <= 4'd2; // 사과주스
-            db_price[1] <= 14'd1500; db_stock[1] <= 4'd3; // 오렌지주스
-            db_price[2] <= 14'd1700; db_stock[2] <= 4'd3; // 망고주스
-            db_price[3] <= 14'd1900; db_stock[3] <= 4'd3; // 포도주스
-            db_price[4] <= 14'd2300; db_stock[4] <= 4'd3; // 파인애플주스
+            db_price[0] <= 14'd1200; db_stock[0] <= 4'd1; // 사과주스
+            db_price[1] <= 14'd1500; db_stock[1] <= 4'd0; // 오렌지주스
+            db_price[2] <= 14'd1700; db_stock[2] <= 4'd0; // 망고주스
+            db_price[3] <= 14'd1900; db_stock[3] <= 4'd0; // 포도주스
+            db_price[4] <= 14'd2300; db_stock[4] <= 4'd1; // 파인애플주스
 
             o_status             <= 32'd0;  // IDLE
             o_change             <= 32'd0;
