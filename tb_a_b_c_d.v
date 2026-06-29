@@ -56,6 +56,11 @@ module tb_a_b_c_d;
     wire [6:0] seg;
     wire [3:0] an;
     wire servo_out;
+    wire [7:0] ja_dbg;
+    wire [4:0] ext_stock_led;
+    wire [4:0] ext_sugar_bar;
+    wire [4:0] ext_ice_bar;
+    wire [3:0] dut_fsm_state;
 
     integer fail_count;
     integer req_write_count;
@@ -70,11 +75,13 @@ module tb_a_b_c_d;
     integer led_full_count;
     integer change_cplt_count;
     integer servo_close_state_count;
+    integer ext_status_mismatch_count;
+    integer onboard_animation_diff_count;
 
     reg [3:0] monitored_state_d;
     reg [31:0] captured_order_info;
 
-    top_a_b_c_d_wrapper uut (
+    top_a_b_c_d_fnd_debug uut (
         .clk        (clk),
         .arst       (arst),
         .btn_enter  (btn_enter),
@@ -86,8 +93,19 @@ module tb_a_b_c_d;
         .led        (led),
         .seg        (seg),
         .an         (an),
-        .servo_out  (servo_out)
+        .servo_out  (servo_out),
+        .ja_dbg     (ja_dbg),
+        .ext_stock_led(ext_stock_led),
+        .ext_sugar_bar(ext_sugar_bar),
+        .ext_ice_bar(ext_ice_bar)
     );
+
+    // Keep the production timing parameters intact in RTL while making the
+    // full-system self-check practical to run in simulation.
+    defparam uut.u_bcd.u_led.DELAY_MAX = 10;
+    defparam uut.u_bcd.u_servo.WAIT_TIME = 1000;
+
+    assign dut_fsm_state = uut.u_master_fsm.U_MASTER_FSM.debug_state;
 
     initial clk = 1'b0;
     always #5 clk = ~clk;
@@ -107,11 +125,13 @@ module tb_a_b_c_d;
             led_full_count     <= 0;
             change_cplt_count  <= 0;
             servo_close_state_count <= 0;
+            ext_status_mismatch_count <= 0;
+            onboard_animation_diff_count <= 0;
             monitored_state_d  <= ST_INSERT;
             captured_order_info <= 32'd0;
         end
         else begin
-            monitored_state_d <= uut.u_master_fsm.U_MASTER_FSM.state;
+            monitored_state_d <= dut_fsm_state;
 
             if (uut.req_write) begin
                 req_write_count <= req_write_count + 1;
@@ -127,7 +147,7 @@ module tb_a_b_c_d;
                 servo_flag_count <= servo_flag_count + 1;
             if (uut.flag_CHANGE)
                 change_flag_count <= change_flag_count + 1;
-            if ((uut.u_master_fsm.U_MASTER_FSM.state == ST_ACCOUNT) &&
+            if ((dut_fsm_state == ST_ACCOUNT) &&
                 (monitored_state_d != ST_ACCOUNT))
                 account_entry_count <= account_entry_count + 1;
             if (uut.done_write)
@@ -141,6 +161,18 @@ module tb_a_b_c_d;
             if ((uut.u_bcd.u_servo.state == 3'd3) ||
                 (uut.u_bcd.u_servo.state == 3'd4))
                 servo_close_state_count <= servo_close_state_count + 1;
+
+            // Waveform recommendations: ext_stock_led, ext_sugar_bar,
+            // ext_ice_bar, led, uut.flag_DONE, uut.flag_SERVO and
+            // uut.flag_CHANGE. External outputs must remain status-only even
+            // while the onboard LED is selected from led_anim in DONE.
+            if ((ext_stock_led !== uut.inventory_led) ||
+                (ext_sugar_bar !== uut.sugar_led) ||
+                (ext_ice_bar !== uut.ice_led))
+                ext_status_mismatch_count <= ext_status_mismatch_count + 1;
+
+            if (uut.led_anim_active && (led !== uut.led_status))
+                onboard_animation_diff_count <= onboard_animation_diff_count + 1;
         end
     end
 
@@ -209,15 +241,15 @@ module tb_a_b_c_d;
         integer i;
         begin
             i = 0;
-            while ((uut.u_master_fsm.U_MASTER_FSM.state !== expected_state) &&
+            while ((dut_fsm_state !== expected_state) &&
                    (i < FSM_TIMEOUT)) begin
                 @(posedge clk);
                 i = i + 1;
             end
 
-            if (uut.u_master_fsm.U_MASTER_FSM.state !== expected_state) begin
+            if (dut_fsm_state !== expected_state) begin
                 $display("  [FAIL] %s TIMEOUT | state=%0d exp=%0d (t=%0t ns)",
-                         label, uut.u_master_fsm.U_MASTER_FSM.state,
+                         label, dut_fsm_state,
                          expected_state, $time);
                 fail_count = fail_count + 1;
             end
@@ -366,12 +398,12 @@ module tb_a_b_c_d;
             press_enter_user;
             wait_fsm_state_timeout(ST_SUGAR_SEL, "SUGAR_SEL");
 
-            sw[4:0] <= sugar_sel;
+            sw[9:5] <= sugar_sel;
             repeat (3) @(posedge clk);
             press_enter_user;
             wait_fsm_state_timeout(ST_ICE_SEL, "ICE_SEL");
 
-            sw[9:5] <= ice_sel;
+            sw[4:0] <= ice_sel;
             repeat (3) @(posedge clk);
             press_enter_user;
             wait_account_seen_timeout(account_before);
@@ -392,6 +424,8 @@ module tb_a_b_c_d;
         integer servo_flag_before;
         integer change_flag_before;
         integer led_full_before;
+        integer ext_mismatch_before;
+        integer animation_diff_before;
         begin
             $display("\n  --- Successful apple purchase %0d ---", purchase_number);
 
@@ -404,6 +438,8 @@ module tb_a_b_c_d;
             servo_flag_before  = servo_flag_count;
             change_flag_before = change_flag_count;
             led_full_before    = led_full_count;
+            ext_mismatch_before = ext_status_mismatch_count;
+            animation_diff_before = onboard_animation_diff_count;
 
             press_money(1000);
             check_money(16'd1000);
@@ -434,7 +470,18 @@ module tb_a_b_c_d;
             `CHECK("LED animation reached 0xFFFF",
                    (led_full_count - led_full_before) > 0, 1'b1)
             `CHECK("FSM waits in DONE while switches are on",
-                   uut.u_master_fsm.U_MASTER_FSM.state, ST_DONE)
+                   dut_fsm_state, ST_DONE)
+            `CHECK("external stock LED matches inventory status",
+                   ext_stock_led, uut.inventory_led)
+            `CHECK("external sugar bar matches sugar status",
+                   ext_sugar_bar, uut.sugar_led)
+            `CHECK("external ice bar matches ice status",
+                   ext_ice_bar, uut.ice_led)
+            `CHECK("external LEDs stayed status-only during DONE animation",
+                   ext_status_mismatch_count - ext_mismatch_before, 0)
+            `CHECK("onboard LED selected animation during DONE",
+                   (onboard_animation_diff_count - animation_diff_before) > 0,
+                   1'b1)
 
             sw <= 15'd0;
             wait_fsm_state_timeout(ST_SERVO, "SERVO");
@@ -464,8 +511,11 @@ module tb_a_b_c_d;
         begin
             $display("\n===== Phase 0: Reset check =====");
             `CHECK("reset state INSERT",
-                   uut.u_master_fsm.U_MASTER_FSM.state, ST_INSERT)
-            `CHECK_HEX("reset LED", led, 16'h0000)
+                   dut_fsm_state, ST_INSERT)
+            `CHECK_HEX("reset LED status", led, 16'h7400)
+            `CHECK("reset external stock LED", ext_stock_led, 5'b11101)
+            `CHECK("reset external sugar bar", ext_sugar_bar, 5'b00000)
+            `CHECK("reset external ice bar", ext_ice_bar, 5'b00000)
             check_money(16'd0);
         end
     endtask
@@ -522,7 +572,7 @@ module tb_a_b_c_d;
     task run_normal_purchase_phase;
         begin
             $display("\n===== Phase 1: Normal purchase =====");
-            do_success_purchase_apple(1, 1'b1);
+            do_success_purchase_apple(1, 1'b0);
         end
     endtask
 
@@ -558,7 +608,7 @@ module tb_a_b_c_d;
             `CHECK_HEX("captured apple order", captured_order_info, 32'h0000_4000)
             `CHECK("NO_MONEY status", uut.status_out, 32'd2)
             `CHECK("FSM state NO_MONEY",
-                   uut.u_master_fsm.U_MASTER_FSM.state, ST_NO_MONEY)
+                   dut_fsm_state, ST_NO_MONEY)
             `CHECK("req_write delta", req_write_count - req_write_before, 1)
             `CHECK("req_read delta", req_read_count - req_read_before, 1)
             `CHECK("update delta", update_count - update_before, 0)
@@ -568,7 +618,7 @@ module tb_a_b_c_d;
             check_money(16'd1000);
             `CHECK_BIT("apple inventory still available", uut.inventory_out, 14, 1'b1)
             `CHECK("apple stock not decremented",
-                   uut.u_bcd.u_axi_slave.u_inventory_core.db_stock[0], 4'd2)
+                   uut.u_bcd.u_axi_slave.u_inventory_core.db_stock[0], 4'd1)
         end
     endtask
 
@@ -583,12 +633,11 @@ module tb_a_b_c_d;
         integer change_flag_before;
         begin
             $display("\n===== Phase 3: SOLD_OUT =====");
-            $display("  Exhausting initial apple stock (2)...");
+            $display("  Exhausting initial apple stock (1)...");
 
-            do_success_purchase_apple(1, 1'b1);
-            do_success_purchase_apple(2, 1'b0);
+            do_success_purchase_apple(1, 1'b0);
 
-            $display("\n  --- Third apple purchase attempt (expect SOLD_OUT) ---");
+            $display("\n  --- Second apple purchase attempt (expect SOLD_OUT) ---");
             req_write_before   = req_write_count;
             req_read_before    = req_read_count;
             update_before      = update_count;
@@ -610,7 +659,7 @@ module tb_a_b_c_d;
             `CHECK_HEX("captured apple order", captured_order_info, 32'h0000_4000)
             `CHECK("SOLD_OUT status", uut.status_out, 32'd3)
             `CHECK("FSM state SOLD_OUT",
-                   uut.u_master_fsm.U_MASTER_FSM.state, ST_SOLD_OUT)
+                   dut_fsm_state, ST_SOLD_OUT)
             `CHECK("req_write delta", req_write_count - req_write_before, 1)
             `CHECK("req_read delta", req_read_count - req_read_before, 1)
             `CHECK("update delta", update_count - update_before, 0)
