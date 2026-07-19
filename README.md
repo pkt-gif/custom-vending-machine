@@ -3,7 +3,7 @@
 **Tech Stack & Environment**
 * **Target Board:** Digilent Basys3 (Xilinx Artix-7 FPGA)
 * **Hardware Description Language (HDL):** Verilog HDL
-* **Development Tool:** Xilinx Vivado (2023.2)
+* **Development Tool:** Xilinx Vivado
 * **Key Protocol:** AXI4-Lite
 
 ---
