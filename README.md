@@ -55,6 +55,10 @@
 
 `Basys3` · `Verilog HDL` · `Xilinx Vivado` · `AXI4-Lite` · `FSM` · `PWM`
 
-## 데모 영상
+## 프로젝트 결과
 
-[YouTube 시연 영상](https://www.youtube.com/watch?v=7eshwTPMTOo)
+📑 [노션(Notion)](https://app.notion.com/p/7c8db3ff574a8246985f8142e1b05ad0)
+
+🎬 [유튜브(YouTube) 커스터마이징 자판기 시연 영상](https://www.youtube.com/watch?v=7eshwTPMTOo)
+
+📊 [프로젝트 발표 PPT](https://www.miricanvas.com/v2/ko/design2/8932fea8-39e3-402f-8b49-01dd6987a82c?location=design&type=copy_link&access=direct)
